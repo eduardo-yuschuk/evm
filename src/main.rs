@@ -141,8 +141,10 @@ async fn main() -> Result<()> {
     println!("contract: {:?}", to);
 
     fn execute_call(input: &Vec<u8>, code: &Bytes) {
-        println!("input: {:?}", input);
-        //println!("code: {:?}", code);
+        //println!("input: {:?}", input);
+        for i in 0..10 {
+            println!("index: {}, OP: {}", i, code[i]);
+        }
     }
 
     execute_call(&input, &code);
