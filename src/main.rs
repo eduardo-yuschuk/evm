@@ -2,6 +2,7 @@ use ethers::providers::Http;
 use ethers::providers::Middleware;
 use ethers::providers::Provider;
 use ethers::types::Block;
+use ethers::types::Bytes;
 use ethers::types::Transaction;
 use ethers::types::H160;
 //use ethers::types::U256;
@@ -102,6 +103,49 @@ async fn main() -> Result<()> {
 
     //let block = provider.get_block(100u64).await?;
     //println!("Got block: {}", serde_json::to_string(&block)?);
+
+    async fn get_code(to: H160, provider: &Provider<Http>) -> Result<Bytes> {
+        match File::open(format!("code_{}.json", to)) {
+            Ok(mut file) => {
+                // println!("Reading Code from filesystem");
+                let mut buffer = String::new();
+                file.read_to_string(&mut buffer)?;
+                Ok(serde_json::from_str(buffer.as_str())?)
+            }
+            Err(_) => {
+                println!("Getting Code from Blockchain");
+                //let code =
+                match provider.get_code(to, None).await {
+                    Ok(code) => {
+                        let serialized_code = serde_json::to_string(&code)?;
+                        let mut file = File::create(format!("code_{}.json", to))?;
+                        file.write(serialized_code.as_bytes())?;
+                        Ok(code)
+                    }
+                    Err(err) => Err(err.into()),
+                }
+            }
+        }
+    }
+
+    let mut calls_with_code: Vec<(H160, Vec<u8>, Bytes)> = Vec::new();
+    for (to, input) in calls {
+        let code = get_code(to, &provider).await?;
+        calls_with_code.push((to, input, code));
+        // println!("contract: {}, code len:  {}", to, code.len());
+    }
+
+    // UniswapV2Router02
+    let (to, input, code) = calls_with_code[1].clone();
+
+    println!("contract: {:?}", to);
+
+    fn execute_call(input: &Vec<u8>, code: &Bytes) {
+        println!("input: {:?}", input);
+        //println!("code: {:?}", code);
+    }
+
+    execute_call(&input, &code);
 
     Ok(())
 }
