@@ -7,6 +7,7 @@ use ethers::types::Transaction;
 use ethers::types::H160;
 //use ethers::types::U256;
 use eyre::Result;
+use std::collections::HashMap;
 //use std::fmt;
 use std::fs::File;
 use std::io::prelude::*;
@@ -140,11 +141,46 @@ async fn main() -> Result<()> {
 
     println!("contract: {:?}", to);
 
-    fn execute_call(input: &Vec<u8>, code: &Bytes) {
+    let mut opcodes: HashMap<u8, (&str, &str, u8, &str, &str)> = HashMap::new();
+
+    opcodes.insert(0x52, ("0x52", "MSTORE", 3, "ost, val", "-"));
+    opcodes.insert(0x60, ("0x60", "PUSH1", 3, "-", "uint8"));
+
+    fn execute_call(_input: &Vec<u8>, code: &Bytes) {
         //println!("input: {:?}", input);
-        for i in 0..10 {
-            println!("index: {}, OP: {}", i, code[i]);
+
+        let mut iter = code.into_iter();
+        let mut index = 0;
+
+        fn _next(iter: &mut std::slice::Iter<'_, u8>, index: &mut i32) -> Option<(u8, i32)> {
+            match iter.next() {
+                Some(byte) => {
+                    let old_index = *index;
+                    *index += 1;
+                    Some((*byte, old_index))
+                }
+                None => None,
+            }
         }
+
+        while let Some((byte, index)) = _next(&mut iter, &mut index) {
+            println!("[{0}] {1:#02x}", index, byte);
+            match byte {
+                0x60 => {}
+                _ => panic!("!!! unknown OPCODE {}", byte),
+            }
+        }
+
+        // loop {
+        //     match _next(&mut iter, &mut index) {
+        //         Some((byte, index)) => {
+        //             println!("index: {0}, OP: {1}, hexa: {1:#02x}", index, byte);
+        //         }
+        //         None => {
+        //             break;
+        //         }
+        //     }
+        // }
     }
 
     execute_call(&input, &code);
