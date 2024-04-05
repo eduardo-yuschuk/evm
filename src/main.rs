@@ -265,30 +265,6 @@ async fn main() -> Result<()> {
     //let block = provider.get_block(100u64).await?;
     //println!("Got block: {}", serde_json::to_string(&block)?);
 
-    async fn get_code(to: H160, provider: &Provider<Http>) -> Result<Bytes> {
-        match File::open(format!("contract/code_{}.json", to)) {
-            Ok(mut file) => {
-                // println!("Reading Code from filesystem");
-                let mut buffer = String::new();
-                file.read_to_string(&mut buffer)?;
-                Ok(serde_json::from_str(buffer.as_str())?)
-            }
-            Err(_) => {
-                println!("Getting Code from Blockchain");
-                //let code =
-                match provider.get_code(to, None).await {
-                    Ok(code) => {
-                        let serialized_code = serde_json::to_string(&code)?;
-                        let mut file = File::create(format!("contract/code_{}.json", to))?;
-                        file.write(serialized_code.as_bytes())?;
-                        Ok(code)
-                    }
-                    Err(err) => Err(err.into()),
-                }
-            }
-        }
-    }
-
     let mut calls_with_code: Vec<(H160, Vec<u8>, Bytes)> = Vec::new();
     for (to, input) in calls {
         let code = get_code(to, &provider).await?;
@@ -306,79 +282,114 @@ async fn main() -> Result<()> {
     // opcodes.insert(0x52, ("0x52", "MSTORE", 3, "ost, val", "-"));
     // opcodes.insert(0x60, ("0x60", "PUSH1", 3, "-", "uint8"));
 
-    fn execute_call(_input: &Vec<u8>, code: &Bytes) {
-        //println!("input: {:?}", input);
-
-        let mut iter = code.into_iter();
-        let mut index = 0;
-
-        fn _next(iter: &mut std::slice::Iter<'_, u8>, index: &mut i32) -> Option<(u8, i32)> {
-            match iter.next() {
-                Some(byte) => {
-                    let old_index = *index;
-                    *index += 1;
-                    Some((*byte, old_index))
-                }
-                None => None,
-            }
-        }
-
-        let mut stack = Vec::<u8>::new();
-        let mut memory = vec![0_u8; 512];
-
-        fn print_memory(memory: &Vec<u8>) {
-            println!(
-                "-- MEM START -------------------------------------------------------------------"
-            );
-            let mut index = 0;
-            memory.chunks(32).into_iter().for_each(|chunk| {
-                println!(
-                    "[{:#06}] {}",
-                    index,
-                    chunk[0..32]
-                        .into_iter()
-                        .map(|x| format!("{:02x}", x))
-                        .collect::<String>()
-                );
-                index += 32;
-            });
-            println!(
-                "-- MEM END ---------------------------------------------------------------------"
-            );
-        }
-
-        fn write_memory(memory: &mut Vec<u8>, address: u8, value: &[u8]) {
-            for i in 0..32 {
-                memory[(address + i) as usize] = value[i as usize];
-            }
-        }
-
-        while let Some((byte, byte_index)) = _next(&mut iter, &mut index) {
-            println!("[{:02x}] OP {:02x}", byte_index, byte);
-            match Opcode::from_u8(byte) {
-                Some(Opcode::PUSH1) => match _next(&mut iter, &mut index) {
-                    Some((value, value_index)) => {
-                        println!("[{:02x}] DA {:02x}", value_index, value);
-                        stack.push(value);
-                    }
-                    None => panic!("!!! operand not available"),
-                },
-                Some(Opcode::MSTORE) => {
-                    let address = stack.pop().unwrap();
-                    let value = stack.pop().unwrap();
-                    //memory[address as usize] = value;
-                    let mut b32_value = [0; 32];
-                    b32_value[31] = value;
-                    write_memory(&mut memory, address, &b32_value[..]);
-
-                    print_memory(&memory);
-                }
-                _ => panic!("!!! unknown OPCODE {:#02x}", byte),
-            }
-        }
-    }
-
     execute_call(&input, &code);
 
     Ok(())
+}
+
+async fn get_code(to: H160, provider: &Provider<Http>) -> Result<Bytes> {
+    match File::open(format!("contract/code_{}.json", to)) {
+        Ok(mut file) => {
+            // println!("Reading Code from filesystem");
+            let mut buffer = String::new();
+            file.read_to_string(&mut buffer)?;
+            Ok(serde_json::from_str(buffer.as_str())?)
+        }
+        Err(_) => {
+            println!("Getting Code from Blockchain");
+            //let code =
+            match provider.get_code(to, None).await {
+                Ok(code) => {
+                    let serialized_code = serde_json::to_string(&code)?;
+                    let mut file = File::create(format!("contract/code_{}.json", to))?;
+                    file.write(serialized_code.as_bytes())?;
+                    Ok(code)
+                }
+                Err(err) => Err(err.into()),
+            }
+        }
+    }
+}
+
+fn _next(iter: &mut std::slice::Iter<'_, u8>, index: &mut i32) -> Option<(u8, i32)> {
+    match iter.next() {
+        Some(byte) => {
+            let old_index = *index;
+            *index += 1;
+            Some((*byte, old_index))
+        }
+        None => None,
+    }
+}
+
+fn print_stack(stack: &Vec<u8>) {
+    println!("");
+    println!("+- STACK START -----");
+    let mut index = 0;
+    stack.into_iter().for_each(|byte| {
+        println!("| [{:04x}] {:02x}", index, byte);
+        index += 1;
+    });
+    println!("+- STACK END -------");
+    println!("");
+}
+
+fn print_memory(memory: &Vec<u8>) {
+    println!("");
+    println!("+- MEM START -------------------------------------------------------------------");
+    let mut index = 0;
+    memory.chunks(32).into_iter().for_each(|chunk| {
+        println!(
+            "| [{:06x}] {}",
+            index,
+            chunk[0..32]
+                .into_iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<String>()
+        );
+        index += 32;
+    });
+    println!("+- MEM END ---------------------------------------------------------------------");
+    println!("");
+}
+
+fn write_memory(memory: &mut Vec<u8>, address: u8, value: &[u8]) {
+    for i in 0..32 {
+        memory[(address + i) as usize] = value[i as usize];
+    }
+}
+
+fn execute_call(_input: &Vec<u8>, code: &Bytes) {
+    //println!("input: {:?}", input);
+
+    let mut iter = code.into_iter();
+    let mut index = 0;
+
+    let mut stack = Vec::<u8>::new();
+    let mut memory = vec![0_u8; 512];
+
+    while let Some((byte, byte_index)) = _next(&mut iter, &mut index) {
+        println!("[{:02x}] OP {:02x}", byte_index, byte);
+        match Opcode::from_u8(byte) {
+            Some(Opcode::PUSH1) => match _next(&mut iter, &mut index) {
+                Some((value, value_index)) => {
+                    println!("[{:02x}] DA {:02x}", value_index, value);
+                    stack.push(value);
+                    print_stack(&stack);
+                }
+                None => panic!("!!! operand not available"),
+            },
+            Some(Opcode::MSTORE) => {
+                let address = stack.pop().unwrap();
+                let value = stack.pop().unwrap();
+                //memory[address as usize] = value;
+                let mut b32_value = [0; 32];
+                b32_value[31] = value;
+                write_memory(&mut memory, address, &b32_value[..]);
+
+                print_memory(&memory);
+            }
+            _ => panic!("!!! unknown OPCODE {:#02x}", byte),
+        }
+    }
 }
