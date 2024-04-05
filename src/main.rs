@@ -324,14 +324,41 @@ async fn main() -> Result<()> {
         }
 
         let mut stack = Vec::<u8>::new();
-        let mut memory = vec![0_u8; 4096];
+        let mut memory = vec![0_u8; 512];
+
+        fn print_memory(memory: &Vec<u8>) {
+            println!(
+                "-- MEM START -------------------------------------------------------------------"
+            );
+            let mut index = 0;
+            memory.chunks(32).into_iter().for_each(|chunk| {
+                println!(
+                    "[{:#06}] {}",
+                    index,
+                    chunk[0..32]
+                        .into_iter()
+                        .map(|x| format!("{:02x}", x))
+                        .collect::<String>()
+                );
+                index += 32;
+            });
+            println!(
+                "-- MEM END ---------------------------------------------------------------------"
+            );
+        }
+
+        fn write_memory(memory: &mut Vec<u8>, address: u8, value: &[u8]) {
+            for i in 0..32 {
+                memory[(address + i) as usize] = value[i as usize];
+            }
+        }
 
         while let Some((byte, byte_index)) = _next(&mut iter, &mut index) {
-            println!("[{}] {:#02x}", byte_index, byte);
+            println!("[{:02x}] OP {:02x}", byte_index, byte);
             match Opcode::from_u8(byte) {
                 Some(Opcode::PUSH1) => match _next(&mut iter, &mut index) {
                     Some((value, value_index)) => {
-                        println!("[{}] {:#02x}", value_index, value);
+                        println!("[{:02x}] DA {:02x}", value_index, value);
                         stack.push(value);
                     }
                     None => panic!("!!! operand not available"),
@@ -339,7 +366,12 @@ async fn main() -> Result<()> {
                 Some(Opcode::MSTORE) => {
                     let address = stack.pop().unwrap();
                     let value = stack.pop().unwrap();
-                    memory[address as usize] = value;
+                    //memory[address as usize] = value;
+                    let mut b32_value = [0; 32];
+                    b32_value[31] = value;
+                    write_memory(&mut memory, address, &b32_value[..]);
+
+                    print_memory(&memory);
                 }
                 _ => panic!("!!! unknown OPCODE {:#02x}", byte),
             }
