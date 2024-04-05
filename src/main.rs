@@ -337,7 +337,9 @@ async fn main() -> Result<()> {
                     None => panic!("!!! operand not available"),
                 },
                 Some(Opcode::MSTORE) => {
-                    //memory[]
+                    let address = stack.pop().unwrap();
+                    let value = stack.pop().unwrap();
+                    memory[address as usize] = value;
                 }
                 _ => panic!("!!! unknown OPCODE {:#02x}", byte),
             }
