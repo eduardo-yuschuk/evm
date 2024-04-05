@@ -5,6 +5,7 @@ use ethers::types::Block;
 use ethers::types::Bytes;
 use ethers::types::Transaction;
 use ethers::types::H160;
+use ethers::types::H256;
 //use ethers::types::U256;
 use eyre::Result;
 //use std::collections::HashMap;
@@ -20,7 +21,7 @@ extern crate num_traits;
 use num_traits::FromPrimitive;
 //use num_traits::ToPrimitive;
 
-#[derive(Primitive)]
+#[derive(Primitive, Debug)]
 enum Opcode {
     STOP = 0x00,
     ADD = 0x01,
@@ -207,24 +208,7 @@ async fn main() -> Result<()> {
 
     println!("block_with_txs: {:?}", block_with_txs.transactions.len());
 
-    // #[derive(PartialEq)]
-    // enum TransactionKind<'a> {
-    //     Transfer(H160, H160, U256),
-    //     Deployment(H160, &'a [u8]),
-    //     Call(H160, H160, &'a [u8]),
-    // }
-
-    // impl<'a> fmt::Display for TransactionKind<'a> {
-    //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //         match self {
-    //             TransactionKind::Transfer(_, _, _) => write!(f, "Transfer"),
-    //             TransactionKind::Deployment(_, _) => write!(f, "Deployment"),
-    //             TransactionKind::Call(_, _, _) => write!(f, "Call"),
-    //         }
-    //     }
-    // }
-
-    let calls: Vec<(H160, Vec<u8>)> = block_with_txs
+    let calls: Vec<(H160, Vec<u8>, H256)> = block_with_txs
         .transactions
         .into_iter()
         .filter_map(|tx| match (tx.from, tx.to, tx.input.as_ref()) {
@@ -232,7 +216,7 @@ async fn main() -> Result<()> {
                 if _input.len() == 0 {
                     None
                 } else {
-                    Some((_to, _input.to_owned()))
+                    Some((_to, _input.to_owned(), tx.hash))
                 }
             }
             _ => None,
@@ -241,46 +225,38 @@ async fn main() -> Result<()> {
 
     println!("{} contract calls found", calls.len());
 
-    //let mut transactions_kind1 = Vec::<TransactionKind<'_>>::new();
-
-    // for tx in block_with_txs.transactions {
-    //     let kind = match (tx.from, tx.to, tx.input.as_ref()) {
-    //         (from, Some(to), []) => TransactionKind::Transfer(from, to, tx.value),
-    //         (from, None, input) => TransactionKind::Deployment(from, input),
-    //         (from, Some(to), input) => TransactionKind::Call(from, to, input),
-    //     };
-    //     transactions_kind1.push(kind);
-    // }
-
-    // let transactions_kind: Vec<TransactionKind<'_>> = block_with_txs
-    //     .transactions
-    //     .into_iter()
-    //     .map(|tx| match (tx.from, tx.to, tx.input.as_ref()) {
-    //         (from, Some(to), []) => TransactionKind::Transfer(from, to, tx.value),
-    //         (from, None, input) => TransactionKind::Deployment(from, input.clone()),
-    //         (from, Some(to), input) => TransactionKind::Call(from, to, input.clone()),
-    //     })
-    //     .collect();
-
-    //let block = provider.get_block(100u64).await?;
-    //println!("Got block: {}", serde_json::to_string(&block)?);
-
-    let mut calls_with_code: Vec<(H160, Vec<u8>, Bytes)> = Vec::new();
-    for (to, input) in calls {
+    let mut calls_with_code: Vec<(H160, Vec<u8>, Bytes, H256)> = Vec::new();
+    for (to, input, hash) in calls {
         let code = get_code(to, &provider).await?;
-        calls_with_code.push((to, input, code));
+        calls_with_code.push((to, input, code, hash));
         // println!("contract: {}, code len:  {}", to, code.len());
     }
 
     // UniswapV2Router02
-    let (to, input, code) = calls_with_code[1].clone();
+    // Function:
+    //  swapExactTokensForTokens(
+    //      uint256 amountIn,
+    //      uint256 amountOutMin,
+    //      address[] path,
+    //      address to,
+    //      uint256 deadline
+    //  )
+    // MethodID: 0x38ed1739
+    // Decoded Input Data:
+    // #    Name            Type	    Data
+    // 0	amountIn	    uint256     730730370223261824
+    // 1	amountOutMin	uint256	    473867243277649
+    // 2	path	        address[]	0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+    //                                  0x8CEFBEB2172a9382753De431a493E21Ba9694004
+    // 3	to	            address	    0xaE971465F3280b9528Caf04cfd4FA4C8F9c67e02
+    // 4	deadline	    uint256	    1712088319
+    let (to, input, code, hash) = calls_with_code[1].clone();
 
+    println!("################################################################################");
+    println!("tx hash: {:?}", hash);
     println!("contract: {:?}", to);
-    println!("code: {:?}", to);
-
-    // let mut opcodes: HashMap<u8, (&str, &str, u8, &str, &str)> = HashMap::new();
-    // opcodes.insert(0x52, ("0x52", "MSTORE", 3, "ost, val", "-"));
-    // opcodes.insert(0x60, ("0x60", "PUSH1", 3, "-", "uint8"));
+    println!("code (length): {:?}", code.len());
+    println!("input (length): {:?}", input.len());
 
     execute_call(&input, &code);
 
@@ -311,12 +287,12 @@ async fn get_code(to: H160, provider: &Provider<Http>) -> Result<Bytes> {
     }
 }
 
-fn _next(iter: &mut std::slice::Iter<'_, u8>, index: &mut i32) -> Option<(u8, i32)> {
+fn _next(iter: &mut std::slice::Iter<'_, u8>, pc: &mut u32) -> Option<(u8, u32)> {
     match iter.next() {
         Some(byte) => {
-            let old_index = *index;
-            *index += 1;
-            Some((*byte, old_index))
+            let old_pc = *pc;
+            *pc += 1;
+            Some((*byte, old_pc))
         }
         None => None,
     }
@@ -325,10 +301,12 @@ fn _next(iter: &mut std::slice::Iter<'_, u8>, index: &mut i32) -> Option<(u8, i3
 fn print_stack(stack: &Vec<u8>) {
     println!("");
     println!("+- STACK START -----");
-    let mut index = 0;
-    stack.into_iter().for_each(|byte| {
-        println!("| [{:04x}] {:02x}", index, byte);
-        index += 1;
+    let mut i = stack.len();
+    let mut reverse_stack = stack.clone();
+    reverse_stack.reverse();
+    reverse_stack.into_iter().for_each(|byte| {
+        println!("| [{:04x}] {:02x}", i - 1, byte);
+        i -= 1;
     });
     println!("+- STACK END -------");
     println!("");
@@ -337,17 +315,17 @@ fn print_stack(stack: &Vec<u8>) {
 fn print_memory(memory: &Vec<u8>) {
     println!("");
     println!("+- MEM START -------------------------------------------------------------------");
-    let mut index = 0;
-    memory.chunks(32).into_iter().for_each(|chunk| {
+    let mut i = 0;
+    memory.chunks(32).for_each(|chunk| {
         println!(
             "| [{:06x}] {}",
-            index,
+            i,
             chunk[0..32]
                 .into_iter()
                 .map(|x| format!("{:02x}", x))
                 .collect::<String>()
         );
-        index += 32;
+        i += 32;
     });
     println!("+- MEM END ---------------------------------------------------------------------");
     println!("");
@@ -359,26 +337,73 @@ fn write_memory(memory: &mut Vec<u8>, address: u8, value: &[u8]) {
     }
 }
 
-fn execute_call(_input: &Vec<u8>, code: &Bytes) {
+fn print_calldata(calldata: &Vec<Vec<&u8>>) {
+    println!("");
+    println!("+- CALLDATA START --------------------------------------------------------------");
+    let mut i = 0;
+    calldata.into_iter().for_each(|word| {
+        println!(
+            "| [{:0x}] {}",
+            i,
+            word.into_iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<String>()
+        );
+        i += 1;
+    });
+
+    println!("+- CALLDATA END ----------------------------------------------------------------");
+    println!("");
+}
+
+struct 
+
+fn execute_call(input: &Vec<u8>, code: &Bytes) {
     //println!("input: {:?}", input);
 
     let mut iter = code.into_iter();
-    let mut index = 0;
+    let mut pc = 0_u32;
 
-    let mut stack = Vec::<u8>::new();
+    let mut stack = Vec::<H256>::new();
     let mut memory = vec![0_u8; 512];
+    let function_selector = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
+    let calldata = input[4..]
+        .chunks(32)
+        .map(|chunk| Vec::from_iter(chunk.into_iter()))
+        .collect::<Vec<Vec<&u8>>>();
 
-    while let Some((byte, byte_index)) = _next(&mut iter, &mut index) {
-        println!("[{:02x}] OP {:02x}", byte_index, byte);
+    println!("Function selector: {:08x}", function_selector);
+
+    print_calldata(&calldata);
+
+    while let Some((byte, byte_pc)) = _next(&mut iter, &mut pc) {
+        println!(
+            "[{:02x}] OP {:02x} ({:?})",
+            byte_pc,
+            byte,
+            Opcode::from_u8(byte).unwrap()
+        );
         match Opcode::from_u8(byte) {
-            Some(Opcode::PUSH1) => match _next(&mut iter, &mut index) {
-                Some((value, value_index)) => {
-                    println!("[{:02x}] DA {:02x}", value_index, value);
-                    stack.push(value);
+            Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
+                Some((value, value_pc)) => {
+                    println!("[{:02x}] DA {:02x}", value_pc, value);
+                    stack.push(H256::from(value));
                     print_stack(&stack);
                 }
                 None => panic!("!!! operand not available"),
             },
+            Some(Opcode::PUSH2) => {
+                for _ in 0..2 {
+                    match _next(&mut iter, &mut pc) {
+                        Some((value, value_pc)) => {
+                            println!("[{:02x}] DA {:02x}", value_pc, value);
+                            stack.push(value);
+                        }
+                        None => panic!("!!! operand not available"),
+                    }
+                }
+                print_stack(&stack);
+            }
             Some(Opcode::MSTORE) => {
                 let address = stack.pop().unwrap();
                 let value = stack.pop().unwrap();
@@ -388,6 +413,34 @@ fn execute_call(_input: &Vec<u8>, code: &Bytes) {
                 write_memory(&mut memory, address, &b32_value[..]);
 
                 print_memory(&memory);
+            }
+            Some(Opcode::CALLDATASIZE) => {
+                println!("(*) calldata.len(): {}", calldata.len());
+                stack.push(calldata.len() as u8);
+                print_stack(&stack);
+            }
+            Some(Opcode::LT) => {
+                let a = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let result = if a < b { 1 } else { 0 };
+                println!("(*) {} < {}: {}", a, b, result);
+                stack.push(result as u8);
+                print_stack(&stack);
+            }
+            Some(Opcode::JUMPI) => {
+                let offset = stack.pop().unwrap();
+                let condition = stack.pop().unwrap();
+                println!(
+                    "(*) offset: {0:#02x} ({0}): condition: {1}",
+                    offset, condition
+                );
+                if condition == 1 {
+                    pc = offset as u32;
+                }
+                println!("(*) PC: {0:#02x}", pc);
+            },
+            Some(Opcode::CALLDATALOAD) => {
+
             }
             _ => panic!("!!! unknown OPCODE {:#02x}", byte),
         }
