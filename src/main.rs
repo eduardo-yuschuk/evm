@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     let block_number = 19570359_u64;
 
     let block_with_txs: Block<Transaction> =
-        match File::open(format!("block_{}.json", block_number)) {
+        match File::open(format!("block/block_{}.json", block_number)) {
             Ok(mut file) => {
                 println!("Reading Block from filesystem");
                 let mut buffer = String::new();
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
                 println!("Getting Block from Blockchain");
                 let _block_with_txs = provider.get_block_with_txs(block_number).await?.unwrap();
                 let serialized_block_with_txs = serde_json::to_string(&_block_with_txs)?;
-                let mut file = File::create(format!("block_{}.json", block_number))?;
+                let mut file = File::create(format!("block/block_{}.json", block_number))?;
                 file.write(serialized_block_with_txs.as_bytes())?;
                 _block_with_txs
             }
@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
     //println!("Got block: {}", serde_json::to_string(&block)?);
 
     async fn get_code(to: H160, provider: &Provider<Http>) -> Result<Bytes> {
-        match File::open(format!("code_{}.json", to)) {
+        match File::open(format!("contract/code_{}.json", to)) {
             Ok(mut file) => {
                 // println!("Reading Code from filesystem");
                 let mut buffer = String::new();
@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
                 match provider.get_code(to, None).await {
                     Ok(code) => {
                         let serialized_code = serde_json::to_string(&code)?;
-                        let mut file = File::create(format!("code_{}.json", to))?;
+                        let mut file = File::create(format!("contract/code_{}.json", to))?;
                         file.write(serialized_code.as_bytes())?;
                         Ok(code)
                     }
