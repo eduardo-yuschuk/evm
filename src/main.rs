@@ -9,8 +9,11 @@ use ethers::types::H160;
 use ethers::types::H256;
 //use ethers::types::U256;
 use eyre::Result;
+use std::fmt;
+//use num_traits::ToBytes;
 //use std::collections::HashMap;
 //use std::fmt;
+use bitvec::prelude::*;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
@@ -229,8 +232,8 @@ async fn main() -> Result<()> {
     let mut calls_with_code: Vec<(H160, Vec<u8>, Bytes, H256)> = Vec::new();
     for (to, input, hash) in calls {
         let code = get_code(to, &provider).await?;
-        calls_with_code.push((to, input, code, hash));
-        // println!("contract: {}, code len:  {}", to, code.len());
+        calls_with_code.push((to, input, code.clone(), hash));
+        //println!("contract: {}, code len:  {}", to, code.len());
     }
 
     // UniswapV2Router02
@@ -251,7 +254,9 @@ async fn main() -> Result<()> {
     //                                  0x8CEFBEB2172a9382753De431a493E21Ba9694004
     // 3	to	            address	    0xaE971465F3280b9528Caf04cfd4FA4C8F9c67e02
     // 4	deadline	    uint256	    1712088319
-    let (to, input, code, hash) = calls_with_code[1].clone();
+    //let (to, input, code, hash) = calls_with_code[1].clone();
+
+    let (to, input, code, hash) = calls_with_code[2].clone();
 
     println!("################################################################################");
     println!("tx hash: {:?}", hash);
@@ -299,14 +304,19 @@ fn _next(iter: &mut std::slice::Iter<'_, u8>, pc: &mut u32) -> Option<(u8, u32)>
     }
 }
 
+<<<<<<< HEAD
 fn print_stack(stack: &Vec<H256>) {
+=======
+fn print_stack(stack: &Vec<_256>) {
+>>>>>>> d38a4d6a59267ad3e8a4489e164f8b97bb0c5c44
     println!("");
     println!("+- STACK START -----");
     let mut i = stack.len();
     let mut reverse_stack = stack.clone();
     reverse_stack.reverse();
-    reverse_stack.into_iter().for_each(|byte| {
-        println!("| [{:04x}] {:02x}", i - 1, byte);
+    reverse_stack.into_iter().for_each(|frame| {
+        //println!("| [{:04x}] {:16x}", i - 1, byte);
+        println!("| [{:04x}] {}", i - 1, frame);
         i -= 1;
     });
     println!("+- STACK END -------");
@@ -338,9 +348,36 @@ fn write_memory(memory: &mut Vec<u8>, address: u8, value: &[u8]) {
     }
 }
 
-fn print_calldata(calldata: &Vec<Vec<&u8>>) {
+// fn print_calldata(calldata: &Vec<Vec<&u8>>) {
+//     println!("");
+//     println!("+- CALLDATA START --------------------------------------------------------------");
+//     let mut i = 0;
+//     calldata.into_iter().for_each(|word| {
+//         println!(
+//             "| [{:0x}] {}",
+//             i,
+//             word.into_iter()
+//                 .map(|x| format!("{:02x}", x))
+//                 .collect::<String>()
+//         );
+//         i += 1;
+//     });
+
+//     println!("+- CALLDATA END ----------------------------------------------------------------");
+//     println!("");
+// }
+
+fn print_calldata(calldata: &Vec<u8>) {
+    let function_selector =
+        u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
+    let calldata = calldata[4..]
+        .chunks(32)
+        .map(|chunk| Vec::from_iter(chunk.into_iter()))
+        .collect::<Vec<Vec<&u8>>>();
+
     println!("");
     println!("+- CALLDATA START --------------------------------------------------------------");
+    println!("| Function selector: {:08x}", function_selector);
     let mut i = 0;
     calldata.into_iter().for_each(|word| {
         println!(
@@ -357,21 +394,84 @@ fn print_calldata(calldata: &Vec<Vec<&u8>>) {
     println!("");
 }
 
+#[derive(Clone, Copy)]
+struct _256 {
+    bytes: [u8; 32],
+}
+
+impl _256 {
+    fn from_u8(from: u8) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes[31] = from;
+        _256 { bytes: bytes }
+    }
+
+    fn from_bytes(from: [u8; 32]) -> Self {
+        _256 { bytes: from }
+    }
+
+    fn from_slice(from: &[u8]) -> Self {
+        let mut bytes = [0u8; 32];
+        let mut i = 0;
+        for byte in from.into_iter() {
+            bytes[i] = *byte;
+            i += 1;
+        }
+        _256 { bytes }
+    }
+
+    fn from_u32(from: u32) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes[28] = from.to_be_bytes()[0];
+        bytes[29] = from.to_be_bytes()[1];
+        bytes[30] = from.to_be_bytes()[2];
+        bytes[31] = from.to_be_bytes()[3];
+        _256 { bytes }
+    }
+
+    fn get_bytes(self) -> [u8; 32] {
+        self.bytes
+    }
+
+    fn to_u32(self) -> u32 {
+        let mut bytes = [0_u8; 4];
+        bytes[0] = self.bytes[28];
+        bytes[1] = self.bytes[29];
+        bytes[2] = self.bytes[30];
+        bytes[3] = self.bytes[31];
+        u32::from_be_bytes(bytes)
+    }
+}
+
+impl fmt::Display for _256 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut str = String::new();
+        for byte in self.bytes.iter() {
+            let v = format!("{:02x}", byte);
+            let a = v.as_str();
+            str += a;
+        }
+        write!(f, "{}", str)
+    }
+}
+
 fn execute_call(input: &Vec<u8>, code: &Bytes) {
     //println!("input: {:?}", input);
 
     let mut iter = code.into_iter();
     let mut pc = 0_u32;
 
-    let mut stack = Vec::<H256>::new();
+    let mut stack = Vec::<_256>::new();
     let mut memory = vec![0_u8; 512];
-    let function_selector = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
-    let calldata = input[4..]
-        .chunks(32)
-        .map(|chunk| Vec::from_iter(chunk.into_iter()))
-        .collect::<Vec<Vec<&u8>>>();
+    //let function_selector = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
+    // let calldata = input[4..]
+    //     .chunks(32)
+    //     .map(|chunk| Vec::from_iter(chunk.into_iter()))
+    //     .collect::<Vec<Vec<&u8>>>();
 
-    println!("Function selector: {:08x}", function_selector);
+    let calldata = input;
+
+    //println!("Function selector: {:08x}", function_selector);
 
     print_calldata(&calldata);
 
@@ -386,7 +486,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
                 Some((value, value_pc)) => {
                     println!("[{:02x}] DA {:02x}", value_pc, value);
-                    stack.push(h256_from_u8(value));
+                    //stack.push(H256::from_slice(&value.to_ne_bytes()));
+                    stack.push(_256::from_u8(value));
                     print_stack(&stack);
                 }
                 None => panic!("!!! operand not available"),
@@ -396,7 +497,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                     match _next(&mut iter, &mut pc) {
                         Some((value, value_pc)) => {
                             println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(h256_from_u8(value));
+                            //stack.push(H256::from_slice(&value.to_ne_bytes()));
+                            stack.push(_256::from_u8(value));
                         }
                         None => panic!("!!! operand not available"),
                     }
@@ -407,25 +509,27 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 let address = *stack.pop().unwrap().as_bytes().last().unwrap();
                 let value = *stack.pop().unwrap().as_bytes().last().unwrap();
                 //memory[address as usize] = value;
-                let mut b32_value = [0; 32];
-                b32_value[31] = value;
-                write_memory(&mut memory, address, &b32_value[..]);
+                //let mut b32_value = [0; 32];
+                //b32_value[31] = value;
+                //write_memory(&mut memory, address, &b32_value[..]);
+                write_memory(&mut memory, address.get_bytes()[31], &value.get_bytes());
 
                 print_memory(&memory);
             }
             Some(Opcode::CALLDATASIZE) => {
                 println!("(*) calldata.len(): {}", calldata.len());
-                stack.push(h256_from_u8(calldata.len() as u8));
-
+                //let len = H256::from_slice(&calldata.len().to_ne_bytes()[..]);
+                stack.push(_256::from_u32(calldata.len() as u32));
                 print_stack(&stack);
             }
             Some(Opcode::LT) => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                let result = if a < b { 1 } else { 0 };
+                let result = if a.to_u32() < b.to_u32() { 1 } else { 0 };
                 println!("(*) {} < {}: {}", a, b, result);
-                stack.push(h256_from_u8(result as u8));
-
+                //let res1 = &result.to_ne_bytes()[..];
+                //let result_h256 = H256::from_slice(res1);
+                stack.push(_256::from_u32(result as u32));
                 print_stack(&stack);
             }
             Some(Opcode::JUMPI) => {
@@ -433,17 +537,62 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 let condition = *stack.pop().unwrap().as_bytes().last().unwrap();
 
                 println!(
-                    "(*) offset: {0:#02x} ({0}): condition: {1}",
-                    offset, condition
+                    //"(*) offset: {0:#02x} ({0}): condition: {1}",
+                    "(*) offset: {} ({}): condition: {}",
+                    offset.clone().to_u32(),
+                    offset,
+                    condition
                 );
-
-                if condition == 1 {
-                    pc = offset as u32;
+                if condition.to_u32() == 1 {
+                    pc = offset.to_u32();
                 }
-
                 println!("(*) PC: {0:#02x}", pc);
             }
             Some(Opcode::CALLDATALOAD) => {
+                let offset = stack.pop().unwrap();
+
+                let offset_usize = offset.to_u32() as usize;
+                let available_bytes = calldata.len() - offset_usize;
+                let to_read = if available_bytes < 32 {
+                    available_bytes
+                } else {
+                    32
+                };
+
+                let mut data = [0_u8; 32];
+                // filling with available data
+                for i in 0..to_read {
+                    data[i] = calldata[offset_usize + i];
+                }
+                let data_256 = _256::from_bytes(data);
+
+                println!(
+                    "(*) offset: {} ({}): data:  {}",
+                    offset_usize, offset, data_256
+                );
+
+                stack.push(data_256);
+                print_stack(&stack);
+            }
+            Some(Opcode::SHR) => {
+                let shift = stack.pop().unwrap();
+                let value = stack.pop().unwrap();
+
+                println!(
+                    "(*) shift: {} ({}): value:  {}",
+                    shift,
+                    shift.to_u32(),
+                    value
+                );
+
+                let mut bits = BitArray::<_, Msb0>::new(value.get_bytes());
+                bits.shift_right(shift.to_u32() as usize);
+                let data_256 = _256::from_slice(bits.as_raw_slice());
+
+                stack.push(data_256);
+                print_stack(&stack);
+            }
+            Some(Opcode::DUP1) => {
                 
             }
             _ => panic!("!!! unknown OPCODE {:#02x}", byte),
