@@ -304,11 +304,7 @@ fn _next(iter: &mut std::slice::Iter<'_, u8>, pc: &mut u32) -> Option<(u8, u32)>
     }
 }
 
-<<<<<<< HEAD
-fn print_stack(stack: &Vec<H256>) {
-=======
 fn print_stack(stack: &Vec<_256>) {
->>>>>>> d38a4d6a59267ad3e8a4489e164f8b97bb0c5c44
     println!("");
     println!("+- STACK START -----");
     let mut i = stack.len();
