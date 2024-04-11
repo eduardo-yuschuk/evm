@@ -1,6 +1,7 @@
 use ethers::providers::Http;
 use ethers::providers::Middleware;
 use ethers::providers::Provider;
+//use ethers::types::BigEndianHash;
 use ethers::types::Block;
 use ethers::types::Bytes;
 use ethers::types::Transaction;
@@ -298,7 +299,7 @@ fn _next(iter: &mut std::slice::Iter<'_, u8>, pc: &mut u32) -> Option<(u8, u32)>
     }
 }
 
-fn print_stack(stack: &Vec<u8>) {
+fn print_stack(stack: &Vec<H256>) {
     println!("");
     println!("+- STACK START -----");
     let mut i = stack.len();
@@ -356,8 +357,6 @@ fn print_calldata(calldata: &Vec<Vec<&u8>>) {
     println!("");
 }
 
-struct 
-
 fn execute_call(input: &Vec<u8>, code: &Bytes) {
     //println!("input: {:?}", input);
 
@@ -387,7 +386,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
                 Some((value, value_pc)) => {
                     println!("[{:02x}] DA {:02x}", value_pc, value);
-                    stack.push(H256::from(value));
+                    stack.push(h256_from_u8(value));
                     print_stack(&stack);
                 }
                 None => panic!("!!! operand not available"),
@@ -397,7 +396,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                     match _next(&mut iter, &mut pc) {
                         Some((value, value_pc)) => {
                             println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(value);
+                            stack.push(h256_from_u8(value));
                         }
                         None => panic!("!!! operand not available"),
                     }
@@ -405,8 +404,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 print_stack(&stack);
             }
             Some(Opcode::MSTORE) => {
-                let address = stack.pop().unwrap();
-                let value = stack.pop().unwrap();
+                let address = *stack.pop().unwrap().as_bytes().last().unwrap();
+                let value = *stack.pop().unwrap().as_bytes().last().unwrap();
                 //memory[address as usize] = value;
                 let mut b32_value = [0; 32];
                 b32_value[31] = value;
@@ -416,7 +415,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             }
             Some(Opcode::CALLDATASIZE) => {
                 println!("(*) calldata.len(): {}", calldata.len());
-                stack.push(calldata.len() as u8);
+                stack.push(h256_from_u8(calldata.len() as u8));
+
                 print_stack(&stack);
             }
             Some(Opcode::LT) => {
@@ -424,25 +424,35 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 let b = stack.pop().unwrap();
                 let result = if a < b { 1 } else { 0 };
                 println!("(*) {} < {}: {}", a, b, result);
-                stack.push(result as u8);
+                stack.push(h256_from_u8(result as u8));
+
                 print_stack(&stack);
             }
             Some(Opcode::JUMPI) => {
-                let offset = stack.pop().unwrap();
-                let condition = stack.pop().unwrap();
+                let offset = *stack.pop().unwrap().as_bytes().last().unwrap();
+                let condition = *stack.pop().unwrap().as_bytes().last().unwrap();
+
                 println!(
                     "(*) offset: {0:#02x} ({0}): condition: {1}",
                     offset, condition
                 );
+
                 if condition == 1 {
                     pc = offset as u32;
                 }
-                println!("(*) PC: {0:#02x}", pc);
-            },
-            Some(Opcode::CALLDATALOAD) => {
 
+                println!("(*) PC: {0:#02x}", pc);
+            }
+            Some(Opcode::CALLDATALOAD) => {
+                
             }
             _ => panic!("!!! unknown OPCODE {:#02x}", byte),
         }
     }
+}
+
+fn h256_from_u8(input: u8) -> H256 {
+    let mut slice = [0_u8; 32];
+    slice[31] = input;
+    H256::from_slice(&slice)
 }
