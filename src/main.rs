@@ -272,7 +272,14 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
         );
         match Opcode::from_u8(byte) {
             Some(Opcode::STOP) => unimplemented!(),
-            Some(Opcode::ADD) => unimplemented!(),
+            Some(Opcode::ADD) => {
+                let a = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let result = a.add(b);
+                println!("(*) {} + {}: {}", a, b, result);
+                stack.push(result);
+                print_stack(&stack);
+            }
             Some(Opcode::MUL) => unimplemented!(),
             Some(Opcode::SUB) => unimplemented!(),
             Some(Opcode::DIV) => unimplemented!(),
@@ -326,91 +333,6 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::ORIGIN) => unimplemented!(),
             Some(Opcode::CALLER) => unimplemented!(),
             Some(Opcode::CALLVALUE) => unimplemented!(),
-            Some(Opcode::CALLDATALOAD) => unimplemented!(),
-            Some(Opcode::CALLDATASIZE) => unimplemented!(),
-            Some(Opcode::CALLDATACOPY) => unimplemented!(),
-            Some(Opcode::CODESIZE) => unimplemented!(),
-            Some(Opcode::CODECOPY) => unimplemented!(),
-            Some(Opcode::GASPRICE) => unimplemented!(),
-            Some(Opcode::EXTCODESIZE) => unimplemented!(),
-            Some(Opcode::EXTCODECOPY) => unimplemented!(),
-            Some(Opcode::RETURNDATASIZE) => unimplemented!(),
-            Some(Opcode::RETURNDATACOPY) => unimplemented!(),
-            Some(Opcode::EXTCODEHASH) => unimplemented!(),
-            Some(Opcode::BLOCKHASH) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            // Some(Opcode::) => unimplemented!(),
-            Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
-                Some((value, value_pc)) => {
-                    println!("[{:02x}] DA {:02x}", value_pc, value);
-                    stack.push(Uint256::from_u8(value));
-                    print_stack(&stack);
-                }
-                None => panic!("!!! operand not available"),
-            },
-            Some(Opcode::PUSH2) => {
-                for _ in 0..2 {
-                    match _next(&mut iter, &mut pc) {
-                        Some((value, value_pc)) => {
-                            println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(Uint256::from_u8(value));
-                        }
-                        None => panic!("!!! operand not available"),
-                    }
-                }
-                print_stack(&stack);
-            }
-            Some(Opcode::PUSH4) => {
-                for _ in 0..4 {
-                    match _next(&mut iter, &mut pc) {
-                        Some((value, value_pc)) => {
-                            println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(Uint256::from_u8(value));
-                        }
-                        None => panic!("!!! operand not available"),
-                    }
-                }
-                print_stack(&stack);
-            }
-            Some(Opcode::MSTORE) => {
-                let address = stack.pop().unwrap();
-                let value = stack.pop().unwrap();
-                //memory[address as usize] = value;
-                //let mut b32_value = [0; 32];
-                //b32_value[31] = value;
-                //write_memory(&mut memory, address, &b32_value[..]);
-                write_memory(&mut memory, address.get_byte(0), &value.as_bytes());
-
-                print_memory(&memory);
-            }
-            Some(Opcode::CALLDATASIZE) => {
-                println!("(*) calldata.len(): {}", calldata.len());
-                //let len = H256::from_slice(&calldata.len().to_ne_bytes()[..]);
-                stack.push(Uint256::from_u32(calldata.len() as u32));
-                print_stack(&stack);
-            }
-
-            Some(Opcode::JUMPI) => {
-                let offset = stack.pop().unwrap().to_u32(); //.as_bytes().last().unwrap();
-                let condition = stack.pop().unwrap().to_u8(); //.as_bytes().last().unwrap();
-
-                println!(
-                    //"(*) offset: {0:#02x} ({0}): condition: {1}",
-                    "(*) offset: {} ({}): condition: {}",
-                    offset, //.clone().to_u32(),
-                    offset,
-                    condition
-                );
-                if condition == 1_u8 {
-                    pc = offset;
-                }
-                println!("(*) PC: {0:#02x}", pc);
-            }
             Some(Opcode::CALLDATALOAD) => {
                 let offset = stack.pop().unwrap();
 
@@ -437,7 +359,133 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 stack.push(data_256);
                 print_stack(&stack);
             }
+            Some(Opcode::CALLDATASIZE) => {
+                println!("(*) calldata.len(): {}", calldata.len());
+                //let len = H256::from_slice(&calldata.len().to_ne_bytes()[..]);
+                stack.push(Uint256::from_u32(calldata.len() as u32));
+                print_stack(&stack);
+            }
+            Some(Opcode::CALLDATACOPY) => unimplemented!(),
+            Some(Opcode::CODESIZE) => unimplemented!(),
+            Some(Opcode::CODECOPY) => unimplemented!(),
+            Some(Opcode::GASPRICE) => unimplemented!(),
+            Some(Opcode::EXTCODESIZE) => unimplemented!(),
+            Some(Opcode::EXTCODECOPY) => unimplemented!(),
+            Some(Opcode::RETURNDATASIZE) => unimplemented!(),
+            Some(Opcode::RETURNDATACOPY) => unimplemented!(),
+            Some(Opcode::EXTCODEHASH) => unimplemented!(),
+            Some(Opcode::BLOCKHASH) => unimplemented!(),
+            Some(Opcode::COINBASE) => unimplemented!(),
+            Some(Opcode::TIMESTAMP) => unimplemented!(),
+            Some(Opcode::NUMBER) => unimplemented!(),
+            Some(Opcode::PREVRANDAO) => unimplemented!(),
+            Some(Opcode::GASLIMIT) => unimplemented!(),
+            Some(Opcode::CHAINID) => unimplemented!(),
+            Some(Opcode::SELFBALANCE) => unimplemented!(),
+            Some(Opcode::BASEFEE) => unimplemented!(),
+            Some(Opcode::BLOBHASH) => unimplemented!(),
+            Some(Opcode::BLOBBASEFEE) => unimplemented!(),
+            Some(Opcode::POP) => unimplemented!(),
+            Some(Opcode::MLOAD) => unimplemented!(),
+            Some(Opcode::MSTORE) => {
+                let address = stack.pop().unwrap();
+                let value = stack.pop().unwrap();
+                //memory[address as usize] = value;
+                //let mut b32_value = [0; 32];
+                //b32_value[31] = value;
+                //write_memory(&mut memory, address, &b32_value[..]);
+                write_memory(&mut memory, address.get_byte(0), &value.as_bytes());
 
+                print_memory(&memory);
+            }
+            Some(Opcode::SLOAD) => unimplemented!(),
+            Some(Opcode::SSTORE) => unimplemented!(),
+            Some(Opcode::JUMP) => unimplemented!(),
+            Some(Opcode::JUMPI) => {
+                let offset = stack.pop().unwrap().to_u32(); //.as_bytes().last().unwrap();
+                let condition = stack.pop().unwrap().to_u8(); //.as_bytes().last().unwrap();
+
+                println!(
+                    //"(*) offset: {0:#02x} ({0}): condition: {1}",
+                    "(*) offset: {} ({}): condition: {}",
+                    offset, //.clone().to_u32(),
+                    offset,
+                    condition
+                );
+                if condition == 1_u8 {
+                    pc = offset;
+                }
+                println!("(*) PC: {0:#02x}", pc);
+            }
+            Some(Opcode::PC) => unimplemented!(),
+            Some(Opcode::MSIZE) => unimplemented!(),
+            Some(Opcode::GAS) => unimplemented!(),
+            Some(Opcode::JUMPDEST) => unimplemented!(),
+            Some(Opcode::TLOAD) => unimplemented!(),
+            Some(Opcode::TSTORE) => unimplemented!(),
+            Some(Opcode::MCOPY) => unimplemented!(),
+            Some(Opcode::PUSH0) => unimplemented!(),
+            Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
+                Some((value, value_pc)) => {
+                    println!("[{:02x}] DA {:02x}", value_pc, value);
+                    stack.push(Uint256::from_u8(value));
+                    print_stack(&stack);
+                }
+                None => panic!("!!! operand not available"),
+            },
+            Some(Opcode::PUSH2) => {
+                for _ in 0..2 {
+                    match _next(&mut iter, &mut pc) {
+                        Some((value, value_pc)) => {
+                            println!("[{:02x}] DA {:02x}", value_pc, value);
+                            stack.push(Uint256::from_u8(value));
+                        }
+                        None => panic!("!!! operand not available"),
+                    }
+                }
+                print_stack(&stack);
+            }
+            Some(Opcode::PUSH3) => unimplemented!(),
+            Some(Opcode::PUSH4) => {
+                for _ in 0..4 {
+                    match _next(&mut iter, &mut pc) {
+                        Some((value, value_pc)) => {
+                            println!("[{:02x}] DA {:02x}", value_pc, value);
+                            stack.push(Uint256::from_u8(value));
+                        }
+                        None => panic!("!!! operand not available"),
+                    }
+                }
+                print_stack(&stack);
+            }
+            Some(Opcode::PUSH5) => unimplemented!(),
+            Some(Opcode::PUSH6) => unimplemented!(),
+            Some(Opcode::PUSH7) => unimplemented!(),
+            Some(Opcode::PUSH8) => unimplemented!(),
+            Some(Opcode::PUSH9) => unimplemented!(),
+            Some(Opcode::PUSH10) => unimplemented!(),
+            Some(Opcode::PUSH11) => unimplemented!(),
+            Some(Opcode::PUSH12) => unimplemented!(),
+            Some(Opcode::PUSH13) => unimplemented!(),
+            Some(Opcode::PUSH14) => unimplemented!(),
+            Some(Opcode::PUSH15) => unimplemented!(),
+            Some(Opcode::PUSH16) => unimplemented!(),
+            Some(Opcode::PUSH17) => unimplemented!(),
+            Some(Opcode::PUSH18) => unimplemented!(),
+            Some(Opcode::PUSH19) => unimplemented!(),
+            Some(Opcode::PUSH20) => unimplemented!(),
+            Some(Opcode::PUSH21) => unimplemented!(),
+            Some(Opcode::PUSH22) => unimplemented!(),
+            Some(Opcode::PUSH23) => unimplemented!(),
+            Some(Opcode::PUSH24) => unimplemented!(),
+            Some(Opcode::PUSH25) => unimplemented!(),
+            Some(Opcode::PUSH26) => unimplemented!(),
+            Some(Opcode::PUSH27) => unimplemented!(),
+            Some(Opcode::PUSH28) => unimplemented!(),
+            Some(Opcode::PUSH29) => unimplemented!(),
+            Some(Opcode::PUSH30) => unimplemented!(),
+            Some(Opcode::PUSH31) => unimplemented!(),
+            Some(Opcode::PUSH32) => unimplemented!(),
             Some(Opcode::DUP1) => {
                 match stack.last() {
                     Some(top) => {
@@ -447,7 +495,52 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                     None => panic!("!!! inconsistent program"),
                 };
             }
-            Some(Opcode::EQ) => {}
+            Some(Opcode::DUP2) => unimplemented!(),
+            Some(Opcode::DUP3) => unimplemented!(),
+            Some(Opcode::DUP4) => unimplemented!(),
+            Some(Opcode::DUP5) => unimplemented!(),
+            Some(Opcode::DUP6) => unimplemented!(),
+            Some(Opcode::DUP7) => unimplemented!(),
+            Some(Opcode::DUP8) => unimplemented!(),
+            Some(Opcode::DUP9) => unimplemented!(),
+            Some(Opcode::DUP10) => unimplemented!(),
+            Some(Opcode::DUP11) => unimplemented!(),
+            Some(Opcode::DUP12) => unimplemented!(),
+            Some(Opcode::DUP13) => unimplemented!(),
+            Some(Opcode::DUP14) => unimplemented!(),
+            Some(Opcode::DUP15) => unimplemented!(),
+            Some(Opcode::DUP16) => unimplemented!(),
+            Some(Opcode::SWAP1) => unimplemented!(),
+            Some(Opcode::SWAP2) => unimplemented!(),
+            Some(Opcode::SWAP3) => unimplemented!(),
+            Some(Opcode::SWAP4) => unimplemented!(),
+            Some(Opcode::SWAP5) => unimplemented!(),
+            Some(Opcode::SWAP6) => unimplemented!(),
+            Some(Opcode::SWAP7) => unimplemented!(),
+            Some(Opcode::SWAP8) => unimplemented!(),
+            Some(Opcode::SWAP9) => unimplemented!(),
+            Some(Opcode::SWAP10) => unimplemented!(),
+            Some(Opcode::SWAP11) => unimplemented!(),
+            Some(Opcode::SWAP12) => unimplemented!(),
+            Some(Opcode::SWAP13) => unimplemented!(),
+            Some(Opcode::SWAP14) => unimplemented!(),
+            Some(Opcode::SWAP15) => unimplemented!(),
+            Some(Opcode::SWAP16) => unimplemented!(),
+            Some(Opcode::LOG0) => unimplemented!(),
+            Some(Opcode::LOG1) => unimplemented!(),
+            Some(Opcode::LOG2) => unimplemented!(),
+            Some(Opcode::LOG3) => unimplemented!(),
+            Some(Opcode::LOG4) => unimplemented!(),
+            Some(Opcode::CREATE) => unimplemented!(),
+            Some(Opcode::CALL) => unimplemented!(),
+            Some(Opcode::CALLCODE) => unimplemented!(),
+            Some(Opcode::RETURN) => unimplemented!(),
+            Some(Opcode::DELEGATECALL) => unimplemented!(),
+            Some(Opcode::CREATE2) => unimplemented!(),
+            Some(Opcode::STATICCALL) => unimplemented!(),
+            Some(Opcode::REVERT) => unimplemented!(),
+            Some(Opcode::INVALID) => unimplemented!(),
+            Some(Opcode::SELFDESTRUCT) => unimplemented!(),
             _ => panic!("!!! unknown OPCODE {:#02x}", byte),
         }
     }
