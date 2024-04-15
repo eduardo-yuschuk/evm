@@ -6,20 +6,13 @@ use opcode::Opcode;
 use ethers::providers::Http;
 use ethers::providers::Middleware;
 use ethers::providers::Provider;
-//use ethers::types::BigEndianHash;
 use ethers::types::Block;
 use ethers::types::Bytes;
 use ethers::types::Transaction;
 use ethers::types::H160;
 use ethers::types::H256;
-//use ethers::types::U256;
 use eyre::Result;
-use integer::Uint256;
-// use std::fmt;
-//use num_traits::ToBytes;
-//use std::collections::HashMap;
-//use std::fmt;
-// use bitvec::prelude::*;
+//use integer::Uint256;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
@@ -30,6 +23,8 @@ extern crate num_traits;
 
 //use num_traits::FromPrimitive;
 //use num_traits::ToPrimitive;
+
+use ethers::types::U256;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -157,7 +152,7 @@ fn _next(iter: &mut std::slice::Iter<'_, u8>, pc: &mut u32) -> Option<(u8, u32)>
     }
 }
 
-fn print_stack(stack: &Vec<Uint256>) {
+fn print_stack(stack: &Vec<U256>) {
     println!("");
     println!("+- STACK START -----");
     let mut i = stack.len();
@@ -249,7 +244,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
     let mut iter = code.into_iter();
     let mut pc = 0_u32;
 
-    let mut stack = Vec::<Uint256>::new();
+    let mut stack = Vec::<U256>::new();
     let mut memory = vec![0_u8; 512];
     //let function_selector = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
     // let calldata = input[4..]
@@ -275,7 +270,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::ADD) => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                let result = a.add(b);
+                let result = a.checked_add(b).unwrap();
                 println!("(*) {} + {}: {}", a, b, result);
                 stack.push(result);
                 print_stack(&stack);
@@ -293,9 +288,9 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::LT) => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                let result = if a.to_u32() < b.to_u32() { 1 } else { 0 };
+                let result = if a < b { U256::one() } else { U256::zero() };
                 println!("(*) {} < {}: {}", a, b, result);
-                stack.push(Uint256::from_u32(result as u32));
+                stack.push(result);
                 print_stack(&stack);
             }
             Some(Opcode::GT) => unimplemented!(),
@@ -316,12 +311,12 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 println!(
                     "(*) shift: {} ({}): value:  {}",
                     shift,
-                    shift.to_u32(),
+                    shift.as_u32(),
                     value
                 );
 
-                let mut shifted = value.clone();
-                shifted.shift_right(shift.to_u32() as usize);
+                let shifted = shift_right(&value, shift.as_u32() as usize);
+                //shifted.shift_right();
 
                 stack.push(shifted);
                 print_stack(&stack);
@@ -336,7 +331,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::CALLDATALOAD) => {
                 let offset = stack.pop().unwrap();
 
-                let offset_usize = offset.to_u32() as usize;
+                let offset_usize = offset.as_u32() as usize;
                 let available_bytes = calldata.len() - offset_usize;
                 let to_read = if available_bytes < 32 {
                     available_bytes
@@ -349,7 +344,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 for i in 0..to_read {
                     data[i] = calldata[offset_usize + i];
                 }
-                let data_256 = Uint256::from_slice(&data);
+                let data_256 = U256::from_big_endian(&data); //from_slice(&data);
 
                 println!(
                     "(*) offset: {} ({}): data:  {}",
@@ -362,7 +357,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::CALLDATASIZE) => {
                 println!("(*) calldata.len(): {}", calldata.len());
                 //let len = H256::from_slice(&calldata.len().to_ne_bytes()[..]);
-                stack.push(Uint256::from_u32(calldata.len() as u32));
+                //stack.push(U256::from_u32(calldata.len() as u32));
+                stack.push(U256::from(calldata.len() as u32));
                 print_stack(&stack);
             }
             Some(Opcode::CALLDATACOPY) => unimplemented!(),
@@ -394,7 +390,9 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                 //let mut b32_value = [0; 32];
                 //b32_value[31] = value;
                 //write_memory(&mut memory, address, &b32_value[..]);
-                write_memory(&mut memory, address.get_byte(0), &value.as_bytes());
+                let mut bytes = [0_u8; 32];
+                value.to_big_endian(&mut bytes);
+                write_memory(&mut memory, (address.as_u32() | 0xFF) as u8, &bytes);
 
                 print_memory(&memory);
             }
@@ -402,18 +400,20 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::SSTORE) => unimplemented!(),
             Some(Opcode::JUMP) => unimplemented!(),
             Some(Opcode::JUMPI) => {
-                let offset = stack.pop().unwrap().to_u32(); //.as_bytes().last().unwrap();
-                let condition = stack.pop().unwrap().to_u8(); //.as_bytes().last().unwrap();
+                // let offset = stack.pop().unwrap().to_u32();
+                // let condition = stack.pop().unwrap().to_u8();
+                let offset = stack.pop().unwrap();
+                let condition = stack.pop().unwrap();
 
                 println!(
                     //"(*) offset: {0:#02x} ({0}): condition: {1}",
                     "(*) offset: {} ({}): condition: {}",
                     offset, //.clone().to_u32(),
-                    offset,
+                    offset.as_u32(),
                     condition
                 );
-                if condition == 1_u8 {
-                    pc = offset;
+                if condition.as_u32() == 1_u32 {
+                    pc = offset.as_u32();
                 }
                 println!("(*) PC: {0:#02x}", pc);
             }
@@ -428,7 +428,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::PUSH1) => match _next(&mut iter, &mut pc) {
                 Some((value, value_pc)) => {
                     println!("[{:02x}] DA {:02x}", value_pc, value);
-                    stack.push(Uint256::from_u8(value));
+                    //stack.push(U256::from_u8(value));
+                    stack.push(U256::from_big_endian(&[value]));
                     print_stack(&stack);
                 }
                 None => panic!("!!! operand not available"),
@@ -438,7 +439,8 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                     match _next(&mut iter, &mut pc) {
                         Some((value, value_pc)) => {
                             println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(Uint256::from_u8(value));
+                            //stack.push(U256::from_u8(value));
+                            stack.push(U256::from_big_endian(&[value]));
                         }
                         None => panic!("!!! operand not available"),
                     }
@@ -451,7 +453,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
                     match _next(&mut iter, &mut pc) {
                         Some((value, value_pc)) => {
                             println!("[{:02x}] DA {:02x}", value_pc, value);
-                            stack.push(Uint256::from_u8(value));
+                            stack.push(U256::from_big_endian(&[value]));
                         }
                         None => panic!("!!! operand not available"),
                     }
@@ -544,4 +546,69 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             _ => panic!("!!! unknown OPCODE {:#02x}", byte),
         }
     }
+}
+
+pub fn shift_left(num: &U256, places: usize) -> U256 {
+    let mut bytes = [0_u8; 32];
+    num.to_big_endian(&mut bytes);
+    let byte_shift = places / 8;
+    let bit_shift = places % 8;
+
+    const NUM_BYTES: usize = 32;
+
+    if byte_shift > 0 {
+        let mut i = NUM_BYTES - 1;
+        while i >= byte_shift {
+            bytes[i] = bytes[i - byte_shift];
+            i -= 1;
+        }
+
+        for i in 0..byte_shift {
+            bytes[i] = 0;
+        }
+    }
+
+    if bit_shift > 0 {
+        let mut i = NUM_BYTES - 1;
+        while i > 0 {
+            bytes[i] = (bytes[i] << bit_shift) | (bytes[i - 1] >> (8 - bit_shift));
+            i -= 1;
+        }
+        bytes[0] <<= bit_shift;
+    }
+
+    U256::from_big_endian(&bytes)
+}
+
+pub fn shift_right(num: &U256, places: usize) -> U256 {
+    let mut bytes = [0_u8; 32];
+    num.to_big_endian(&mut bytes);
+    let byte_shift = places / 8;
+    let bit_shift = places % 8;
+
+    const NUM_BYTES: usize = 32;
+
+    if byte_shift > 0 {
+        let mut i = 0;
+
+        while i < NUM_BYTES - byte_shift {
+            bytes[i] = bytes[i + byte_shift];
+            i += 1;
+        }
+
+        for i in (NUM_BYTES - byte_shift)..NUM_BYTES {
+            bytes[i] = 0;
+        }
+    }
+
+    if bit_shift > 0 {
+        let mut i = 0;
+        while i < (NUM_BYTES - 1) {
+            bytes[i] = (bytes[i] >> bit_shift) | (bytes[i + 1] << (8 - bit_shift));
+            i += 1;
+        }
+        bytes[NUM_BYTES - 1] >>= bit_shift;
+    }
+
+    U256::from_big_endian(&bytes)
 }
