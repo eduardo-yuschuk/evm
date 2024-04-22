@@ -16,6 +16,7 @@ use eyre::Result;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
+use dotenv::dotenv;
 
 #[macro_use]
 extern crate enum_primitive_derive;
@@ -28,8 +29,12 @@ use ethers::types::U256;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv().ok();
+
+    let api_key = std::env::var("API_KEY").expect("API_KEY not found");
+
     let provider =
-        Provider::<Http>::try_from("https://mainnet.infura.io/v3/79408f3788cd4635b40bdd9e4fceaad5")
+        Provider::<Http>::try_from(format!("https://mainnet.infura.io/v3/{}", api_key))
             .expect("could not instantiate HTTP Provider");
 
     //println!("node_info: {:#?}", provider);
@@ -294,7 +299,7 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::DIV) => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                let result = a.overflowing_div(b).0;
+                let result = a.div_mod(b).0;
                 println!("(*) {} - {}: {}", a, b, result);
                 stack.push(result);
                 print_stack(&stack);
