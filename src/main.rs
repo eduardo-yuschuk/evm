@@ -270,14 +270,35 @@ fn execute_call(input: &Vec<u8>, code: &Bytes) {
             Some(Opcode::ADD) => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                let result = a.checked_add(b).unwrap();
+                let result = a.overflowing_add(b).0;
                 println!("(*) {} + {}: {}", a, b, result);
                 stack.push(result);
                 print_stack(&stack);
             }
-            Some(Opcode::MUL) => unimplemented!(),
-            Some(Opcode::SUB) => unimplemented!(),
-            Some(Opcode::DIV) => unimplemented!(),
+            Some(Opcode::MUL) => {
+                let a = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let result = a.overflowing_mul(b).0;
+                println!("(*) {} * {}: {}", a, b, result);
+                stack.push(result);
+                print_stack(&stack);
+            },
+            Some(Opcode::SUB) => {
+                let a = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let result = a.overflowing_sub(b).0;
+                println!("(*) {} - {}: {}", a, b, result);
+                stack.push(result);
+                print_stack(&stack);
+            },
+            Some(Opcode::DIV) => {
+                let a = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let result = a.overflowing_div(b).0;
+                println!("(*) {} - {}: {}", a, b, result);
+                stack.push(result);
+                print_stack(&stack);
+            },
             Some(Opcode::SDIV) => unimplemented!(),
             Some(Opcode::MOD) => unimplemented!(),
             Some(Opcode::SMOD) => unimplemented!(),
